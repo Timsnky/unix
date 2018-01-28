@@ -1,0 +1,95 @@
+DRIVER (CENTOS AND FEDORA)
+
+#!/bin/bash
+yum install mariadb mariadb-server -y
+systemctl start mariadb
+systemctl stop firewalld
+yum install wireshark -y
+tshark -r mysql.pcap -e  mysql.query -T fields -Y "mysql" | grep -Ev “^$” > mysql.txt
+mysql -u root <<-EOF
+CREATE DATABASE cts4348;
+USE cts4348;
+CREATE TABLE stars (
+     id INT AUTO_INCREMENT PRIMARY KEY UNIQUE, 
+     username VARCHAR(45) NOT NULL,
+     gender VARCHAR(15) NOT NULL,
+     category_id INT NOT NULL,
+     address VARCHAR(100), 
+     birthday VARCHAR(45),
+     phone VARCHAR(45)
+ );
+CREATE TABLE categories (
+     id INT AUTO_INCREMENT PRIMARY KEY UNIQUE, 
+     name VARCHAR(100) NOT NULL
+ );
+EOF
+DISTRO=$( cat /etc/*-release | tr [:upper:] [:lower:] | grep -Poi '(centos)' | uniq )
+if [ "$DISTRO" = "centos" ];
+then
+	echo $DISTRO;
+	mysql -u root <<-EOF
+	USE cts4348;
+	SET @@auto_increment_offset=1;
+	SET @@auto_increment_increment=2;
+EOF
+else
+	echo $DISTRO;
+	mysql -u root <<-EOF
+	USE cts4348;
+	SET @@auto_increment_offset=2;
+	SET @@auto_increment_increment=2;
+EOF
+fi
+while IFS= read -r line; do
+    if [[ $line =~ "GRANT SELECT ON" ]]; 
+    then
+    	mysql -u root << EOF
+        $line;
+EOF
+    fi
+done < mysql.txt
+mysql -u root << EOF
+SET PASSWORD FOR 'root'@'localhost' = PASSWORD('5116735');
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE test;
+FLUSH PRIVILEGES;
+EOF
+
+
+
+
+DRIVER (UBUNTU)
+
+#!/bin/bash
+apt-get install haproxy -y
+apt-get install mysql-client-core-5.7 mysql-common -y
+ufw disable
+mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.bk
+cp /root/haproxy.cfg /etc/haproxy/haproxy.cfg
+service haproxy start
+service haproxy stop
+service haproxy start
+
+
+
+
+RUN (CENTOS AND FEDORA)
+
+
+#!/bin/bash
+FILE="$1"
+if [ "$FILE" = "csv" ];
+then
+	mysql -u root --password='5116735' --local-infile <<-EOF
+	LOAD DATA LOCAL INFILE '/root/assignment4.csv path' INTO TABLE stars FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n';
+	LOAD DATA LOCAL INFILE '/root/assignment4.csv path' INTO TABLE categories FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n';
+EOF
+elif [ "$FILE" = "backup" ];
+then
+	mysql -D cts4348 -u root --password='5116735' < assignment4.sql.bk 
+else
+	echo "Unsupported Argument Type";
+EOF
+fi
+
